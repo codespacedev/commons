@@ -31,7 +31,7 @@ on:
 
 jobs:
   release_maven:
-    name: "Update Java"
+    name: "Release Maven"
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:

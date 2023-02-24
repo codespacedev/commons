@@ -19,7 +19,7 @@ on:
 
 jobs:
   release_github:
-    name: "Update Java"
+    name: "Release Github"
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:

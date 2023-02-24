@@ -1,0 +1,91 @@
+name: "MAVEN_RELEASE [JAVA] WC"
+#type: REUSABLE WORKFLOW (WC = workflow_call)
+
+on:
+  workflow_call:
+    inputs:
+      ref:
+        type: string
+        description: "[ref] e.g. branch, tag or commit to checkout [default: github_ref_name || github_head_ref ]"
+        required: false
+      artifacts_filter:
+        type: string
+        description: "[artifacts_filter] artifacts to append on the release [default: target/*.jar,build/*.jar]"
+        required: false
+    secrets:
+      G_TOKEN:
+        description: "Github token"
+        required: false
+      GPG_SIGNING_KEY:
+        description: "GPG key"
+        required: true
+      GPG_PASSPHRASE:
+        description: "GPG Passphrase of the GPG Key"
+        required: false
+      OSSH_USER:
+        description: "Maven Central user"
+        required: true
+      OSSH_PASS:
+        description: "Maven Central password"
+        required: false
+
+jobs:
+  release_maven:
+    name: "Update Java"
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: "Read Input"
+        id: "inputs"
+        run: |
+          echo ""
+          echo "--------------------- BRANCH -------------------"
+          ref_default=${{ github.ref_name || github.head_ref }}
+          ref="${ref_A:-${ref_B:-${ref_C:-${ref_default}}}}"
+          echo "ref [${ref}]"
+          echo "ref=${ref}" >> $GITHUB_OUTPUT
+          echo "--------------------- ARTIFACTS_FILTER ---------"
+          artifacts_filter="${artifacts_filter_A:-${artifacts_filter_B:-${artifacts_filter_C:-'target/*.jar,build/*.jar'}}}"
+          [[ "${artifacts_filter}" == \"*\" || "${artifacts_filter}" == \'*\' ]] && artifacts_filter="${artifacts_filter:1:-1}"         
+          echo "artifacts_filter [${artifacts_filter}]"
+          echo "artifacts_filter=${artifacts_filter}" >> $GITHUB_OUTPUT
+          echo "--------------------- ENVS ---------------------"
+          env
+        env:
+          ref_A: ${{ inputs.ref }}
+          ref_B: ${{ github.event.inputs.ref }}
+          ref_C: ${{ github.event.client_payload.ref }}
+          artifacts_filter_A: ${{ inputs.artifacts_filter }}
+          artifacts_filter_B: ${{ github.event.inputs.artifacts_filter }}
+          artifacts_filter_C: ${{ github.event.client_payload.artifacts_filter }}
+      - name: "Checkout"
+        if: ${{ inputs.skip_test != 'true' }}
+        uses: actions/checkout@main
+        with:
+          fetch-depth: 5
+          ref: ${{ steps.inputs.outputs.ref }}
+          token: ${{ secrets.G_TOKEN || secrets.CI_TOKEN_WORKFLOW || github.token }}
+      - name: "Read Java Info"
+        id: "java_info"
+        if: ${{ inputs.skip_test != 'true' }}
+        uses: YunaBraska/java-info-action@main
+      - name: "Setup Java"
+        if: ${{ inputs.skip_test != 'true' }}
+        uses: actions/setup-java@main
+        with:
+          java-version: ${{ steps.java_info.outputs.java_version }}
+          distribution: 'adopt'
+      - name: "Resolve Dependencies & Plugins"
+        run: |
+          ${{ steps.java_info.outputs.cmd_resolve_deps }}
+          ${{ steps.java_info.outputs.cmd_resolve_plugs }}
+      - name: "Build Artifacts"
+        run: ${{ steps.java_info.outputs.cmd_build }}
+      - name: "Create Maven Central Release"
+        if: steps.pom.outputs.has_pom == 'true'
+        run: |
+          ./mvnw -B -q clean deploy -P release -Dmaven.test.skip=true -Dgpg.passphrase="${{ secrets.GPG_PASSPHRASE }}"
+        env:
+          OSSRH_USERNAME: ${{ secrets.OSSH_USER }}
+          OSSRH_TOKEN: ${{ secrets.OSSH_PASS }}
+          MAVEN_GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}

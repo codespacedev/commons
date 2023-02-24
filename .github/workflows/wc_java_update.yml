@@ -16,9 +16,28 @@ on:
       G_TOKEN:
         description: "Github token"
         required: false
+    outputs:
+      has_changes:
+        description: "[Boolean] true if `sha_latest` != `sha_latest_tag` "
+        value: ${{ jobs.update.outputs.has_changes }}
+      has_local_changes:
+        description: "[Boolean] true if there are changes on non committed files"
+        value: ${{ jobs.update.outputs.has_local_changes }}
+      tag_latest:
+        description: "[String] latest tag"
+        value: ${{ jobs.update.outputs.tag_latest }}
+      tag_new:
+        description: "[String] new tag"
+        value: ${{ jobs.update.outputs.tag_new }}
 
 jobs:
   update:
+    # Map the job outputs to step outputs
+    outputs:
+      has_changes: ${{ steps.git_info.outputs.has_changes }}
+      has_local_changes: ${{ steps.git_info.outputs.has_local_changes }}
+      tag_latest: ${{ steps.git_info.outputs.tag_latest }}
+      tag_new: ${{ steps.semver.outputs.new_version }}
     name: "Update Java"
     runs-on: ubuntu-latest
     timeout-minutes: 10
